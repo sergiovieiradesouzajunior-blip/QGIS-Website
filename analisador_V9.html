@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analisador de Distâncias V9</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #6a0dad, #9b30e8, #6a0dad);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: 0.5px; }
+    header .badge {
+      background: rgba(255,255,255,0.25);
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* ── Layout ── */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    sidebar, .sidebar {
+      background: #fff;
+      border-right: 1px solid #dde3ea;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 16px;
+      gap: 14px;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #7a5cbb;
+      margin-bottom: 4px;
+    }
+
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+    .field-group label { font-size: 0.82rem; font-weight: 600; color: #555; }
+
+    input[type="file"], input[type="number"] {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.84rem;
+      background: #fafafa;
+      transition: border-color 0.2s;
+    }
+    input[type="file"]:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: #7a5cbb;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 9px 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-primary   { background: linear-gradient(135deg,#7a5cbb,#9b30e8); color:#fff; }
+    .btn-success   { background: linear-gradient(135deg,#27ae60,#2ecc71); color:#fff; }
+    .btn-danger    { background: linear-gradient(135deg,#c0392b,#e74c3c); color:#fff; }
+    .btn-secondary { background: linear-gradient(135deg,#7f8c8d,#95a5a6); color:#fff; }
+    .btn:hover:not(:disabled) { filter: brightness(1.08); }
+
+    /* ── Progress ── */
+    .progress-container { margin-top: 4px; }
+    .progress-bar-bg {
+      background: #e0e4ea;
+      border-radius: 8px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg,#7a5cbb,#9b30e8);
+      border-radius: 8px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .progress-text {
+      font-size: 0.78rem;
+      color: #666;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    /* ── Stats cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg,#f8f5ff,#ede8fa);
+      border: 1px solid #d5c8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .stat-card .stat-value {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #6a0dad;
+    }
+    .stat-card .stat-label {
+      font-size: 0.72rem;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    /* ── Right panel ── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #map {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Results panel ── */
+    .results-panel {
+      height: 240px;
+      border-top: 1px solid #dde3ea;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    .results-header {
+      padding: 8px 14px;
+      background: #f5f3fa;
+      border-bottom: 1px solid #e0d9f5;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: #5a3e9b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .results-table-wrap {
+      flex: 1;
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    thead tr { background: #ede8fa; position: sticky; top: 0; z-index: 1; }
+    th { padding: 6px 10px; text-align: left; color: #5a3e9b; font-weight: 700; white-space: nowrap; }
+    td { padding: 5px 10px; border-bottom: 1px solid #f0eef8; vertical-align: middle; }
+    tr:hover td { background: #f8f5ff; }
+
+    .btn-trace {
+      padding: 3px 10px;
+      font-size: 0.78rem;
+      border-radius: 5px;
+      border: none;
+      background: linear-gradient(135deg,#2980b9,#3498db);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      transition: filter 0.15s;
+    }
+    .btn-trace:hover { filter: brightness(1.1); }
+
+    /* ── Legend ── */
+    .legend-container {
+      padding: 8px 14px;
+      background: #f9f9fb;
+      border-top: 1px solid #e9e4f5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.78rem;
+      min-height: 36px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-color {
+      width: 24px;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #ece7f5;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🗺️ Analisador de Distâncias</h1>
+  <span class="badge">V9</span>
+</header>
+
+<div class="main-layout">
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="section-title">Arquivos de entrada</div>
+
+    <div class="field-group">
+      <label>📍 Cidades (.txt/.csv)</label>
+      <input type="file" id="fileCidades" accept=".txt,.csv" />
+      <span style="font-size:0.72rem;color:#999">Formato: UF;Cidade;Latitude;Longitude</span>
+    </div>
+
+    <div class="field-group">
+      <label>✈️ Aeroportos (.txt/.csv)</label>
+      <input type="file" id="fileAeroportos" accept=".txt,.csv" />
+      <span style="font-size:0.72rem;color:#999">Formato: UF;Cidade;Nome;Latitude;Longitude</span>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="section-title">Parâmetros</div>
+    <div class="field-group">
+      <label>📏 Distância mínima (km)</label>
+      <input type="number" id="distanciaMin" value="444" min="1" step="1" />
+    </div>
+
+    <button class="btn btn-secondary" id="btnCarregar">📂 Carregar Arquivos</button>
+    <button class="btn btn-primary"   id="btnAnalisar"  disabled>🔍 Analisar</button>
+    <button class="btn btn-danger"    id="btnLimpar"    disabled>🗑️ Limpar</button>
+    <button class="btn btn-success"   id="btnExportar"  disabled>💾 Exportar CSV</button>
+
+    <hr class="divider" />
+
+    <div class="section-title">Progresso</div>
+    <div class="progress-container">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">Aguardando arquivos…</div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="section-title">Estatísticas</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statTotal">0</div>
+        <div class="stat-label">Cidades</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statFiltradas">0</div>
+        <div class="stat-label">Filtradas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statAeroportos">0</div>
+        <div class="stat-label">Aeroportos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statCache">0</div>
+        <div class="stat-label">Cache hits</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right panel (map + results) ── -->
+  <div class="right-panel">
+    <div id="map"></div>
+
+    <div class="results-panel">
+      <div class="results-header">
+        <span>Resultados</span>
+        <span id="resultsCount" style="font-weight:400;color:#888;font-size:0.8rem"></span>
+      </div>
+      <div class="results-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>UF</th>
+              <th>Cidade</th>
+              <th>Aeroporto mais próximo</th>
+              <th>Dist. Rodovia (km)</th>
+              <th>Dist. Linear (km)</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr><td colspan="6" style="text-align:center;color:#bbb;padding:20px">Sem resultados ainda.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legend-container" id="legendContainer">
+        <span style="color:#bbb;font-size:0.78rem">Rotas traçadas aparecerão aqui.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CONSTANTES
+// ═══════════════════════════════════════════════════════════
+const OSRM_BASE  = 'https://router.project-osrm.org/route/v1/driving/';
+const BATCH_SIZE = 5;          // máx. requisições OSRM em paralelo (ajuste conforme limite da API)
+const BATCH_SLEEP_MS = 50;     // pausa entre lotes em ms (reduz pressão no servidor público)
+
+// ═══════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════
+window.routeCache = new Map();  // cache de rotas OSRM
+let cidades    = [];
+let aeroportos = [];
+let resultados = [];
+let routeLayers = [];           // polylines no mapa
+let legendItems = [];
+let cacheHits   = 0;
+let isAnalyzing = false;
+
+// ═══════════════════════════════════════════════════════════
+//  MAPA
+// ═══════════════════════════════════════════════════════════
+const map = L.map('map').setView([-15.8, -47.9], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19
+}).addTo(map);
+
+// ═══════════════════════════════════════════════════════════
+//  UTILITÁRIOS
+// ═══════════════════════════════════════════════════════════
+function parseCoord(v) {
+  return parseFloat(String(v).replace(',', '.'));
+}
+
+/** Distância Haversine em km */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R  = 6371; // raio médio da Terra em km
+  const dL = (lat2 - lat1) * Math.PI / 180;
+  const dG = (lon2 - lon1) * Math.PI / 180;
+  const a  = Math.sin(dL/2)**2 +
+              Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dG/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function cacheKey(lat1, lon1, lat2, lon2) {
+  return `${lat1},${lon1}-${lat2},${lon2}`;
+}
+
+/** Valida que as coordenadas estão nos intervalos geográficos válidos */
+function coordsValidas(lat, lon) {
+  return isFinite(lat) && isFinite(lon) &&
+         lat >= -90 && lat <= 90 &&
+         lon >= -180 && lon <= 180;
+}
+
+/** Consulta OSRM com cache. Retorna distância em km ou null em erro. */
+async function osrmDistance(lat1, lon1, lat2, lon2) {
+  if (!coordsValidas(lat1, lon1) || !coordsValidas(lat2, lon2)) return null;
+  const key = cacheKey(lat1, lon1, lat2, lon2);
+  if (window.routeCache.has(key)) {
+    cacheHits++;
+    document.getElementById('statCache').textContent = cacheHits;
+    return window.routeCache.get(key);
+  }
+  try {
+    const url = `${OSRM_BASE}${lon1},${lat1};${lon2},${lat2}?overview=false`;
+    const res  = await fetch(url);
+    if (!res.ok) { window.routeCache.set(key, null); return null; }
+    const data = await res.json();
+    const km   = data.routes?.[0]?.distance != null
+                   ? data.routes[0].distance / 1000
+                   : null;
+    window.routeCache.set(key, km);
+    return km;
+  } catch {
+    window.routeCache.set(key, null);
+    return null;
+  }
+}
+
+/** Consulta OSRM com geometria completa (para traçar rota). */
+async function osrmRoute(lat1, lon1, lat2, lon2) {
+  if (!coordsValidas(lat1, lon1) || !coordsValidas(lat2, lon2)) return null;
+  const key = cacheKey(lat1, lon1, lat2, lon2) + ':geom';
+  if (window.routeCache.has(key)) return window.routeCache.get(key);
+  try {
+    const url = `${OSRM_BASE}${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+    const res  = await fetch(url);
+    if (!res.ok) { window.routeCache.set(key, null); return null; }
+    const data = await res.json();
+    const geom = data.routes?.[0]?.geometry ?? null;
+    window.routeCache.set(key, geom);
+    return geom;
+  } catch {
+    window.routeCache.set(key, null);
+    return null;
+  }
+}
+
+function setProgress(pct, msg) {
+  document.getElementById('progressFill').style.width = `${pct}%`;
+  document.getElementById('progressText').textContent  = msg;
+}
+
+function parseFile(text) {
+  return text.trim().split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LEITURA DE ARQUIVOS
+// ═══════════════════════════════════════════════════════════
+function readFileAsText(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload  = e => res(e.target.result);
+    fr.onerror = () => rej(new Error('Erro ao ler arquivo.'));
+    fr.readAsText(file, 'UTF-8');
+  });
+}
+
+document.getElementById('btnCarregar').addEventListener('click', async () => {
+  const fCid = document.getElementById('fileCidades').files[0];
+  const fAer = document.getElementById('fileAeroportos').files[0];
+  if (!fCid || !fAer) { alert('Selecione os dois arquivos antes de carregar.'); return; }
+
+  try {
+    const [textCid, textAer] = await Promise.all([readFileAsText(fCid), readFileAsText(fAer)]);
+
+    cidades = parseFile(textCid).map(linha => {
+      const [uf, cidade, lat, lon] = linha.split(';');
+      return { uf: uf?.trim(), cidade: cidade?.trim(), lat: parseCoord(lat), lon: parseCoord(lon) };
+    }).filter(c => c.cidade && !isNaN(c.lat) && !isNaN(c.lon));
+
+    aeroportos = parseFile(textAer).map(linha => {
+      const [uf, cidade, nome, lat, lon] = linha.split(';');
+      return { uf: uf?.trim(), cidade: cidade?.trim(), nome: nome?.trim(), lat: parseCoord(lat), lon: parseCoord(lon) };
+    }).filter(a => a.nome && !isNaN(a.lat) && !isNaN(a.lon));
+
+    document.getElementById('statTotal').textContent     = cidades.length;
+    document.getElementById('statAeroportos').textContent = aeroportos.length;
+
+    setProgress(0, `✅ ${cidades.length} cidades e ${aeroportos.length} aeroportos carregados.`);
+    document.getElementById('btnAnalisar').disabled = false;
+    document.getElementById('btnLimpar').disabled   = false;
+  } catch (e) {
+    alert(`Erro ao carregar arquivos: ${e.message}`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  ANÁLISE PRINCIPAL
+// ═══════════════════════════════════════════════════════════
+document.getElementById('btnAnalisar').addEventListener('click', async () => {
+  if (isAnalyzing) return;
+  if (!cidades.length || !aeroportos.length) { alert('Carregue os arquivos primeiro.'); return; }
+
+  isAnalyzing = true;
+  resultados  = [];
+  cacheHits   = 0;
+  document.getElementById('statCache').textContent    = 0;
+  document.getElementById('statFiltradas').textContent = 0;
+  document.getElementById('btnAnalisar').disabled = true;
+  document.getElementById('btnExportar').disabled = true;
+
+  const distMin = parseFloat(document.getElementById('distanciaMin').value) || 444;
+  const total   = cidades.length;
+
+  for (let i = 0; i < total; i++) {
+    const cidade = cidades[i];
+    const pct    = Math.round((i / total) * 100);
+
+    // Pré-filtro Haversine: ordenar aeroportos do mais próximo ao mais distante
+    const comHaversine = aeroportos.map(a => ({
+      ...a,
+      hDist: haversine(cidade.lat, cidade.lon, a.lat, a.lon)
+    })).sort((a, b) => a.hDist - b.hDist);
+
+    let melhorKm   = Infinity;
+    let melhorAero = null;
+    let melhorHDist = 0;
+    let parou      = false;
+    let idxParou   = comHaversine.length;
+
+    // Processar em lotes paralelos
+    let j = 0;
+    while (j < comHaversine.length) {
+      // Early-stop: se a distância linear já é maior que a melhor rodoviária, parar
+      if (comHaversine[j].hDist > melhorKm) {
+        idxParou = j;
+        parou    = true;
+        break;
+      }
+
+      const lote = [];
+      for (let k = j; k < Math.min(j + BATCH_SIZE, comHaversine.length); k++) {
+        // Early-stop dentro do lote
+        if (comHaversine[k].hDist > melhorKm) { idxParou = k; parou = true; break; }
+        lote.push(k);
+      }
+      if (parou && lote.length === 0) break;
+
+      setProgress(pct,
+        `[${i+1}/${total}] ${cidade.cidade} — lote ${j+1}-${j+lote.length}` +
+        (melhorKm < Infinity ? ` | melhor: ${melhorKm.toFixed(0)}km` : '')
+      );
+
+      const promises = lote.map(idx => {
+        const a = comHaversine[idx];
+        return osrmDistance(cidade.lat, cidade.lon, a.lat, a.lon).then(km => ({ idx, km }));
+      });
+      const resultados_lote = await Promise.all(promises);
+
+      for (const { idx, km } of resultados_lote) {
+        if (km !== null && km < melhorKm) {
+          melhorKm   = km;
+          melhorAero = comHaversine[idx];
+          melhorHDist = comHaversine[idx].hDist;
+        }
+      }
+
+      j += lote.length;
+      if (parou) break;
+      await sleep(BATCH_SLEEP_MS);
+    }
+
+    const pausaMsg = parou
+      ? ` (early-stop em ${idxParou}/${comHaversine.length})`
+      : '';
+
+    if (melhorKm > distMin) {
+      resultados.push({
+        uf:        cidade.uf,
+        cidade:    cidade.cidade,
+        cidadeLat: cidade.lat,
+        cidadeLon: cidade.lon,
+        aeroporto: melhorAero?.nome ?? '—',
+        aeroLat:   melhorAero?.lat,
+        aeroLon:   melhorAero?.lon,
+        distRodovia: melhorKm === Infinity ? null : melhorKm,
+        distLinear:  melhorHDist,
+        pausaMsg
+      });
+    }
+
+    setProgress(pct,
+      `[${i+1}/${total}] ${cidade.cidade} → ${melhorKm === Infinity ? 'n/d' : melhorKm.toFixed(1) + ' km'}${pausaMsg}`
+    );
+  }
+
+  // Finalizado
+  isAnalyzing = false;
+  document.getElementById('statFiltradas').textContent = resultados.length;
+  document.getElementById('btnAnalisar').disabled  = false;
+  document.getElementById('btnExportar').disabled  = resultados.length === 0;
+  setProgress(100, `✅ Análise concluída! ${resultados.length} cidade(s) filtradas de ${total}.`);
+  renderTable();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  RENDERIZAÇÃO DA TABELA
+// ═══════════════════════════════════════════════════════════
+function renderTable() {
+  const tbody = document.getElementById('resultsBody');
+  document.getElementById('resultsCount').textContent =
+    `${resultados.length} cidades acima do limite`;
+
+  if (!resultados.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#bbb;padding:20px">Nenhuma cidade filtrada.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = resultados.map((r, idx) => `
+    <tr>
+      <td>${r.uf}</td>
+      <td><strong>${r.cidade}</strong></td>
+      <td>${r.aeroporto}</td>
+      <td>${r.distRodovia != null ? r.distRodovia.toFixed(1) : 'n/d'}</td>
+      <td>${r.distLinear.toFixed(1)}</td>
+      <td><button class="btn-trace" onclick="drawRoute(${idx})">🗺 Traçar</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TRAÇAR ROTA NO MAPA
+// ═══════════════════════════════════════════════════════════
+const ROUTE_COLORS = [
+  '#e74c3c','#3498db','#27ae60','#f39c12','#8e44ad',
+  '#16a085','#d35400','#2980b9','#c0392b','#1abc9c'
+];
+
+async function drawRoute(idx) {
+  const r = resultados[idx];
+  if (!r || r.aeroLat === null || r.aeroLat === undefined) { alert('Dados de aeroporto indisponíveis.'); return; }
+
+  const color = ROUTE_COLORS[routeLayers.length % ROUTE_COLORS.length];
+  const geom  = await osrmRoute(r.cidadeLat, r.cidadeLon, r.aeroLat, r.aeroLon);
+
+  if (!geom) { alert('Não foi possível obter a rota pelo OSRM. Verifique a conexão com a internet ou tente novamente mais tarde.'); return; }
+
+  const coords = geom.coordinates.map(([lng, lat]) => [lat, lng]);
+  const poly   = L.polyline(coords, { color, weight: 4, opacity: 0.85 }).addTo(map);
+  routeLayers.push(poly);
+
+  // Marcadores
+  const pin = L.circleMarker([r.cidadeLat, r.cidadeLon], {
+    radius: 6, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1
+  }).bindTooltip(r.cidade).addTo(map);
+
+  const airPin = L.circleMarker([r.aeroLat, r.aeroLon], {
+    radius: 7, fillColor: '#f39c12', color: '#fff', weight: 2, fillOpacity: 1
+  }).bindTooltip(r.aeroporto).addTo(map);
+
+  routeLayers.push(pin, airPin);
+  map.fitBounds(poly.getBounds(), { padding: [40, 40] });
+
+  // Legenda
+  addLegendItem(r.cidade, r.aeroporto, color);
+}
+
+function addLegendItem(cidade, aeroporto, color) {
+  const container = document.getElementById('legendContainer');
+  // Remove placeholder
+  const ph = container.querySelector('span');
+  if (ph) ph.remove();
+
+  const div = document.createElement('div');
+  div.className = 'legend-item';
+  div.innerHTML = `
+    <div class="legend-color" style="background:${color}"></div>
+    <span>${cidade} → ${aeroporto}</span>
+  `;
+  container.appendChild(div);
+  legendItems.push(div);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LIMPAR
+// ═══════════════════════════════════════════════════════════
+document.getElementById('btnLimpar').addEventListener('click', () => {
+  // Remover camadas do mapa
+  routeLayers.forEach(l => map.removeLayer(l));
+  routeLayers  = [];
+  legendItems  = [];
+  resultados   = [];
+  cidades      = [];
+  aeroportos   = [];
+  cacheHits    = 0;
+  window.routeCache.clear();
+
+  document.getElementById('resultsBody').innerHTML =
+    '<tr><td colspan="6" style="text-align:center;color:#bbb;padding:20px">Sem resultados ainda.</td></tr>';
+  document.getElementById('legendContainer').innerHTML =
+    '<span style="color:#bbb;font-size:0.78rem">Rotas traçadas aparecerão aqui.</span>';
+  document.getElementById('resultsCount').textContent = '';
+
+  ['statTotal','statFiltradas','statAeroportos','statCache'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+
+  document.getElementById('fileCidades').value    = '';
+  document.getElementById('fileAeroportos').value = '';
+  document.getElementById('btnAnalisar').disabled = true;
+  document.getElementById('btnExportar').disabled = true;
+  document.getElementById('btnLimpar').disabled   = true;
+
+  setProgress(0, 'Aguardando arquivos…');
+});
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORTAR CSV
+// ═══════════════════════════════════════════════════════════
+document.getElementById('btnExportar').addEventListener('click', () => {
+  if (!resultados.length) return;
+  const header = 'UF;Cidade;Aeroporto;Dist_Rodovia_km;Dist_Linear_km\n';
+  const rows   = resultados.map(r =>
+    `${r.uf};${r.cidade};${r.aeroporto};` +
+    `${r.distRodovia != null ? r.distRodovia.toFixed(2) : ''};` +
+    `${r.distLinear.toFixed(2)}`
+  ).join('\n');
+
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'resultados_V9.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
