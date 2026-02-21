@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analisador de Distâncias V10</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  #header {
+    background: linear-gradient(135deg, #6a0dad 0%, #9b30ff 50%, #6a0dad 100%);
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  #header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; }
+  #header .badge {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border-radius: 12px; padding: 2px 10px; font-size: 0.75rem; font-weight: 600;
+  }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 340px; min-width: 300px; background: #16213e;
+    padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    border-right: 1px solid #0f3460;
+  }
+
+  .card {
+    background: #0f3460; border-radius: 10px; padding: 14px;
+    border: 1px solid #1a4f8a;
+  }
+  .card h3 { font-size: 0.85rem; color: #9b30ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+
+  .form-group { margin-bottom: 10px; }
+  .form-group label { display: block; font-size: 0.78rem; color: #a0a0c0; margin-bottom: 4px; }
+  .form-group input[type="file"],
+  .form-group input[type="number"] {
+    width: 100%; padding: 7px 10px; background: #1a1a2e; border: 1px solid #2a4a7a;
+    border-radius: 6px; color: #e0e0e0; font-size: 0.82rem;
+  }
+  .form-group input[type="number"] { appearance: textfield; }
+
+  .file-status {
+    font-size: 0.72rem; margin-top: 3px; color: #70a0d0;
+    min-height: 16px;
+  }
+
+  /* Buttons */
+  .btn {
+    width: 100%; padding: 9px; border: none; border-radius: 7px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, #6a0dad, #9b30ff); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #7a1dbd, #ab40ff); }
+  .btn-success { background: linear-gradient(135deg, #1a7a3a, #2da856); color: #fff; }
+  .btn-success:hover:not(:disabled) { background: linear-gradient(135deg, #2a8a4a, #3db866); }
+  .btn-danger  { background: linear-gradient(135deg, #7a1a1a, #c04040); color: #fff; }
+  .btn-danger:hover:not(:disabled)  { background: linear-gradient(135deg, #8a2a2a, #d05050); }
+  .btn-export  { background: linear-gradient(135deg, #1a5a7a, #2a80a8); color: #fff; }
+  .btn-export:hover:not(:disabled)  { background: linear-gradient(135deg, #2a6a8a, #3a90b8); }
+
+  .btn-group { display: flex; gap: 8px; }
+  .btn-group .btn { width: auto; flex: 1; }
+
+  /* Progress */
+  #progressSection { display: none; }
+  #progressBar {
+    height: 10px; background: #1a1a2e; border-radius: 5px; overflow: hidden; margin-bottom: 6px;
+  }
+  #progressFill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, #6a0dad, #9b30ff);
+    transition: width 0.3s; border-radius: 5px;
+  }
+  #progressText { font-size: 0.75rem; color: #a0a0c0; }
+  #progressDetail { font-size: 0.7rem; color: #7090b0; margin-top: 2px; min-height: 14px; }
+
+  /* Stats */
+  #statsSection { display: none; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card {
+    background: #1a1a2e; border-radius: 8px; padding: 10px; text-align: center;
+    border: 1px solid #2a4a7a;
+  }
+  .stat-card .val { font-size: 1.3rem; font-weight: 700; color: #9b30ff; }
+  .stat-card .lbl { font-size: 0.68rem; color: #80a0c0; margin-top: 2px; }
+
+  /* Alert */
+  .alert {
+    background: #4a2000; border: 1px solid #a04000; border-radius: 6px;
+    padding: 8px 10px; font-size: 0.75rem; color: #ffa060; margin-top: 6px;
+    display: none;
+  }
+
+  /* Right panel */
+  #rightPanel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #map { flex: 1; min-height: 300px; }
+
+  /* Results */
+  #resultsSection {
+    height: 240px; background: #0f3460; border-top: 1px solid #1a4f8a;
+    display: flex; flex-direction: column;
+  }
+  #resultsHeader {
+    padding: 8px 14px; background: #16213e; border-bottom: 1px solid #1a4f8a;
+    display: flex; align-items: center; gap: 10px;
+  }
+  #resultsHeader h3 { font-size: 0.85rem; color: #9b30ff; }
+  #resultsBody { flex: 1; overflow-y: auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th {
+    background: #16213e; color: #9b30ff; padding: 7px 10px;
+    text-align: left; position: sticky; top: 0; z-index: 1;
+    border-bottom: 1px solid #1a4f8a; font-weight: 600; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  td { padding: 6px 10px; border-bottom: 1px solid #1a3a5a; }
+  tr:hover td { background: rgba(155,48,255,0.08); }
+
+  .badge-dist {
+    display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 0.72rem; font-weight: 600;
+  }
+  .badge-ok   { background: rgba(26,122,58,0.3); color: #4dcc80; border: 1px solid #1a7a3a; }
+  .badge-far  { background: rgba(180,40,40,0.3); color: #ff7070; border: 1px solid #aa2020; }
+
+  .btn-trace {
+    padding: 3px 10px; border-radius: 5px; border: 1px solid #6a0dad;
+    background: rgba(106,13,173,0.2); color: #c080ff; cursor: pointer; font-size: 0.72rem;
+    transition: all 0.15s;
+  }
+  .btn-trace:hover { background: rgba(106,13,173,0.5); color: #e0b0ff; }
+
+  /* Legend */
+  #legend {
+    background: #16213e; border-top: 1px solid #1a4f8a;
+    padding: 6px 14px; font-size: 0.72rem; color: #a0a0c0;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 30px;
+  }
+  #legend .leg-item { display: flex; align-items: center; gap: 4px; }
+  #legend .leg-line { width: 24px; height: 3px; border-radius: 2px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #1a1a2e; }
+  ::-webkit-scrollbar-thumb { background: #3a3a6a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #6a0dad; }
+
+  .empty-msg { text-align: center; color: #4a6a8a; padding: 30px; font-size: 0.82rem; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🗺️ Analisador de Distâncias</h1>
+  <span class="badge">V10</span>
+  <span style="font-size:0.75rem;color:rgba(255,255,255,0.6);margin-left:auto;">OSRM Table API · Batch · Cache</span>
+</div>
+
+<div id="main">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+
+    <div class="card">
+      <h3>📂 Arquivos de Entrada</h3>
+      <div class="form-group">
+        <label>Arquivo de Cidades (UF;Cidade;Lat;Lng)</label>
+        <input type="file" id="fileCidades" accept=".txt,.csv">
+        <div class="file-status" id="statusCidades">Nenhum arquivo carregado</div>
+      </div>
+      <div class="form-group">
+        <label>Arquivo de Aeroportos (UF;Cidade;NomeAero;Lat;Lng)</label>
+        <input type="file" id="fileAeroportos" accept=".txt,.csv">
+        <div class="file-status" id="statusAeroportos">Nenhum arquivo carregado</div>
+      </div>
+      <div class="alert" id="alertParsing"></div>
+      <button class="btn btn-primary" id="btnCarregar" onclick="carregarArquivos()">📥 Carregar Arquivos</button>
+    </div>
+
+    <div class="card">
+      <h3>⚙️ Configuração</h3>
+      <div class="form-group">
+        <label>Distância mínima (km)</label>
+        <input type="number" id="distMin" min="1" step="1">
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🚀 Análise</h3>
+      <div class="btn-group" style="margin-bottom:8px;">
+        <button class="btn btn-success" id="btnAnalisar" onclick="iniciarAnalise()" disabled>▶ Analisar</button>
+        <button class="btn btn-danger"  id="btnLimpar"   onclick="limpar()">🗑 Limpar</button>
+      </div>
+      <button class="btn btn-export" id="btnExportar" onclick="exportarCSV()" disabled>⬇ Exportar CSV</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="progressSection">
+      <h3>⏳ Progresso</h3>
+      <div id="progressBar"><div id="progressFill"></div></div>
+      <div id="progressText">Aguardando...</div>
+      <div id="progressDetail"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card" id="statsSection">
+      <h3>📊 Estatísticas</h3>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="val" id="stTotal">0</div><div class="lbl">Total Cidades</div></div>
+        <div class="stat-card"><div class="val" id="stFiltradas">0</div><div class="lbl">Filtradas (&gt;dist)</div></div>
+        <div class="stat-card"><div class="val" id="stOk">0</div><div class="lbl">Dentro do Limite</div></div>
+        <div class="stat-card"><div class="val" id="stAero">0</div><div class="lbl">Aeroportos</div></div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- RIGHT PANEL -->
+  <div id="rightPanel">
+    <div id="map"></div>
+
+    <div id="resultsSection">
+      <div id="resultsHeader">
+        <h3>📋 Resultados</h3>
+        <span id="resultsCount" style="font-size:0.75rem;color:#6090b0;"></span>
+      </div>
+      <div id="resultsBody">
+        <div class="empty-msg" id="emptyMsg">Carregue os arquivos e clique em Analisar para ver os resultados.</div>
+        <table id="resultsTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>UF</th>
+              <th>Cidade</th>
+              <th>Aeroporto Mais Próximo</th>
+              <th>Distância (km)</th>
+              <th>Status</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="legend">
+      <span style="color:#6090b0;font-size:0.72rem;">Rotas traçadas:</span>
+      <div id="legendItems" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ============================================================
+// CONSTANTES
+// ============================================================
+const MAX_COORDS_PER_REQUEST  = 100;   // Limite de coordenadas por requisição Table API
+const MAX_BATCH_CIDADES       = 50;    // Limite máximo de cidades por lote (independente do nº de aeroportos)
+const TABLE_BATCH_SLEEP_MS    = 200;   // ms de pausa entre lotes da Table API
+const TABLE_MAX_RETRIES       = 3;     // Tentativas máximas por lote em caso de falha
+const TABLE_RETRY_DELAY_MS    = 2000;  // ms de espera antes de nova tentativa após 429
+const DEFAULT_MIN_DISTANCE_KM = 444;   // Distância mínima padrão (km) usada como limiar de filtragem
+const MAX_DISPLAYED_REASONS   = 3;     // Máximo de razões de linhas ignoradas exibidas no alerta
+const OSRM_TABLE_BASE         = 'https://router.project-osrm.org/table/v1/driving/';
+const OSRM_ROUTE_BASE         = 'https://router.project-osrm.org/route/v1/driving/';
+
+const ROUTE_COLORS = [
+  '#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
+  '#cc5de8','#20c997','#f06595','#74c0fc','#a9e34b'
+];
+
+window.geomCache  = new Map();  // Cache de geometrias: cacheKey -> [[lat,lng], ...]
+window.resultados = [];          // Array global de resultados para drawRoute por índice
+
+let cidades     = [];
+let aeroportos  = [];
+let analisando  = false;
+let stopFlag    = false;
+let tracedLayers = [];
+let map, tileLayer;
+
+// ============================================================
+// INICIALIZAÇÃO DO MAPA
+// ============================================================
+function initMap() {
+  map = L.map('map').setView([-14.235, -51.9253], 4);
+  tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+  });
+  tileLayer.addTo(map);
+}
+initMap();
+document.getElementById('distMin').value = DEFAULT_MIN_DISTANCE_KM;
+
+// ============================================================
+// PARSING ROBUSTO
+// ============================================================
+function detectSep(line) {
+  const counts = { ';': (line.match(/;/g)||[]).length, ',': (line.match(/,/g)||[]).length, '\t': (line.match(/\t/g)||[]).length };
+  return Object.keys(counts).reduce((a, b) => counts[a] >= counts[b] ? a : b);
+}
+
+function stripQuotes(s) {
+  s = s.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function parseCoord(s) {
+  return parseFloat(s.replace(',', '.'));
+}
+
+/**
+ * Parseia arquivo de cidades.
+ * Formato esperado: UF;Cidade;Latitude;Longitude
+ * Retorna { dados, ignoradas, motivos }
+ */
+function parseCidades(texto) {
+  const linhas = texto.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (linhas.length === 0) return { dados: [], ignoradas: 0, motivos: ['Arquivo vazio'] };
+
+  const sep = detectSep(linhas[0]);
+  console.log(`[parseCidades] Separador detectado: "${sep === '\t' ? '\\t' : sep}", total linhas: ${linhas.length}`);
+
+  const dados = [];
+  const motivos = [];
+  let ignoradas = 0;
+
+  linhas.forEach((linha, idx) => {
+    const partes = linha.split(sep).map(stripQuotes);
+    if (partes.length < 4) {
+      ignoradas++;
+      const mot = `Linha ${idx+1}: colunas insuficientes (${partes.length}/4) — "${linha.substring(0,60)}"`;
+      motivos.push(mot);
+      console.warn('[parseCidades]', mot);
+      return;
+    }
+    const [uf, cidade, latRaw, lngRaw] = partes;
+    const lat = parseCoord(latRaw);
+    const lng = parseCoord(lngRaw);
+    if (isNaN(lat) || isNaN(lng)) {
+      ignoradas++;
+      const mot = `Linha ${idx+1}: coordenadas inválidas (lat="${latRaw}", lng="${lngRaw}") — "${cidade}"`;
+      motivos.push(mot);
+      console.warn('[parseCidades]', mot);
+      return;
+    }
+    dados.push({ uf: uf.trim(), cidade: cidade.trim(), lat, lng });
+  });
+
+  console.log(`[parseCidades] Processadas: ${dados.length}, Ignoradas: ${ignoradas}`);
+  return { dados, ignoradas, motivos };
+}
+
+/**
+ * Parseia arquivo de aeroportos.
+ * Formato esperado: UF;Cidade;NomeAeroporto;Latitude;Longitude
+ * Retorna { dados, ignoradas, motivos }
+ */
+function parseAeroportos(texto) {
+  const linhas = texto.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (linhas.length === 0) return { dados: [], ignoradas: 0, motivos: ['Arquivo vazio'] };
+
+  const sep = detectSep(linhas[0]);
+  console.log(`[parseAeroportos] Separador detectado: "${sep === '\t' ? '\\t' : sep}", total linhas: ${linhas.length}`);
+
+  const dados = [];
+  const motivos = [];
+  let ignoradas = 0;
+
+  linhas.forEach((linha, idx) => {
+    const partes = linha.split(sep).map(stripQuotes);
+    if (partes.length < 5) {
+      ignoradas++;
+      const mot = `Linha ${idx+1}: colunas insuficientes (${partes.length}/5) — "${linha.substring(0,60)}"`;
+      motivos.push(mot);
+      console.warn('[parseAeroportos]', mot);
+      return;
+    }
+    const [uf, cidade, nome, latRaw, lngRaw] = partes;
+    const lat = parseCoord(latRaw);
+    const lng = parseCoord(lngRaw);
+    if (isNaN(lat) || isNaN(lng)) {
+      ignoradas++;
+      const mot = `Linha ${idx+1}: coordenadas inválidas (lat="${latRaw}", lng="${lngRaw}") — "${nome}"`;
+      motivos.push(mot);
+      console.warn('[parseAeroportos]', mot);
+      return;
+    }
+    dados.push({ uf: uf.trim(), cidade: cidade.trim(), nome: nome.trim(), lat, lng });
+  });
+
+  console.log(`[parseAeroportos] Processadas: ${dados.length}, Ignoradas: ${ignoradas}`);
+  return { dados, ignoradas, motivos };
+}
+
+// ============================================================
+// CARREGAMENTO DE ARQUIVOS
+// ============================================================
+function formatIgnoredLinesAlert(tipo, ignoradas, motivos) {
+  const preview = motivos.slice(0, MAX_DISPLAYED_REASONS).join('; ');
+  const extra   = motivos.length > MAX_DISPLAYED_REASONS ? ` ... (+${motivos.length - MAX_DISPLAYED_REASONS} mais)` : '';
+  return `⚠ ${tipo}: ${ignoradas} linha(s) ignorada(s). Razões: ${preview}${extra}`;
+}
+
+function carregarArquivos() {
+  const fc = document.getElementById('fileCidades');
+  const fa = document.getElementById('fileAeroportos');
+  const alertEl = document.getElementById('alertParsing');
+
+  if (!fc.files[0] || !fa.files[0]) {
+    alert('Selecione ambos os arquivos antes de carregar.');
+    return;
+  }
+
+  alertEl.style.display = 'none';
+  alertEl.textContent = '';
+  cidades = [];
+  aeroportos = [];
+
+  const alertMsgs = [];
+
+  const readFile = f => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(f, 'UTF-8');
+  });
+
+  Promise.all([readFile(fc.files[0]), readFile(fa.files[0])]).then(([txtC, txtA]) => {
+    const rc = parseCidades(txtC);
+    const ra = parseAeroportos(txtA);
+
+    cidades    = rc.dados;
+    aeroportos = ra.dados;
+
+    document.getElementById('statusCidades').textContent    = `✔ ${cidades.length} cidades carregadas`;
+    document.getElementById('statusAeroportos').textContent = `✔ ${aeroportos.length} aeroportos carregados`;
+
+    if (rc.ignoradas > 0) {
+      alertMsgs.push(formatIgnoredLinesAlert('Cidades', rc.ignoradas, rc.motivos));
+    }
+    if (ra.ignoradas > 0) {
+      alertMsgs.push(formatIgnoredLinesAlert('Aeroportos', ra.ignoradas, ra.motivos));
+    }
+
+    if (alertMsgs.length > 0) {
+      alertEl.innerHTML = alertMsgs.join('<br>');
+      alertEl.style.display = 'block';
+    }
+
+    if (cidades.length > 0 && aeroportos.length > 0) {
+      document.getElementById('btnAnalisar').disabled = false;
+    }
+
+    document.getElementById('stAero').textContent = aeroportos.length;
+  }).catch(err => {
+    alert('Erro ao ler arquivos: ' + err.message);
+  });
+}
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function geomCacheKey(lng1, lat1, lng2, lat2) {
+  return `${lng1},${lat1};${lng2},${lat2}`;
+}
+
+// ============================================================
+// TABLE API DO OSRM
+// ============================================================
+/**
+ * Chama a Table API do OSRM para um lote de cidades contra todos os aeroportos.
+ * Retorna array de { cidadeIdx, melhorAero, distKm } ou null em caso de falha total.
+ *
+ * @param {Array} loteCidades  - subarray de objetos cidade {uf, cidade, lat, lng}
+ * @param {Array} todosAero    - array de objetos aeroporto {uf, cidade, nome, lat, lng}
+ * @returns {Array|null}
+ */
+async function tableApiLote(loteCidades, todosAero) {
+  // Montar lista de coordenadas: cidades primeiro, depois aeroportos
+  // Formato OSRM: lng,lat
+  const coords = [
+    ...loteCidades.map(c => `${c.lng},${c.lat}`),
+    ...todosAero.map(a => `${a.lng},${a.lat}`)
+  ];
+
+  const numCidades = loteCidades.length;
+  const numAero    = todosAero.length;
+
+  // Índices: cidades = 0..numCidades-1, aeroportos = numCidades..numCidades+numAero-1
+  const sourceIndices = Array.from({ length: numCidades }, (_, i) => i).join(';');
+  const destIndices   = Array.from({ length: numAero },    (_, i) => numCidades + i).join(';');
+
+  const url = `${OSRM_TABLE_BASE}${coords.join(';')}?sources=${sourceIndices}&destinations=${destIndices}&annotations=distance`;
+
+  let lastError = null;
+  for (let tentativa = 1; tentativa <= TABLE_MAX_RETRIES; tentativa++) {
+    try {
+      const resp = await fetch(url);
+      if (resp.status === 429) {
+        console.warn(`[tableApiLote] Rate limit (429), tentativa ${tentativa}/${TABLE_MAX_RETRIES}. Aguardando ${TABLE_RETRY_DELAY_MS}ms...`);
+        lastError = `HTTP 429 (Rate Limit)`;
+        if (tentativa < TABLE_MAX_RETRIES) await sleep(TABLE_RETRY_DELAY_MS);
+        continue;
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const json = await resp.json();
+      if (json.code !== 'Ok' || !json.distances) {
+        throw new Error(`OSRM code=${json.code}`);
+      }
+
+      // json.distances[i][j] = distância em metros da cidade i até aeroporto j
+      const resultados = [];
+      for (let i = 0; i < numCidades; i++) {
+        const distRow = json.distances[i];
+        let melhorDistM = Infinity;
+        let melhorAeroIdx = -1;
+
+        for (let j = 0; j < numAero; j++) {
+          const d = distRow[j];
+          if (d !== null && d < melhorDistM) {
+            melhorDistM  = d;
+            melhorAeroIdx = j;
+          }
+        }
+
+        resultados.push({
+          cidadeIdx:  i,
+          melhorAero: melhorAeroIdx >= 0 ? todosAero[melhorAeroIdx] : null,
+          distKm:     melhorAeroIdx >= 0 ? melhorDistM / 1000 : null
+        });
+      }
+      return resultados;
+
+    } catch (err) {
+      lastError = err.message;
+      console.warn(`[tableApiLote] Erro na tentativa ${tentativa}/${TABLE_MAX_RETRIES}: ${err.message}`);
+      if (tentativa < TABLE_MAX_RETRIES) await sleep(TABLE_RETRY_DELAY_MS);
+    }
+  }
+
+  console.error(`[tableApiLote] Falha após ${TABLE_MAX_RETRIES} tentativas: ${lastError}`);
+  return null;
+}
+
+// ============================================================
+// ANÁLISE PRINCIPAL
+// ============================================================
+async function iniciarAnalise() {
+  if (analisando) return;
+  if (cidades.length === 0 || aeroportos.length === 0) { alert('Carregue os arquivos primeiro.'); return; }
+
+  const distMin = parseFloat(document.getElementById('distMin').value) || DEFAULT_MIN_DISTANCE_KM;
+  analisando = true;
+  stopFlag   = false;
+  window.resultados = [];
+
+  document.getElementById('btnAnalisar').disabled = true;
+  document.getElementById('btnExportar').disabled = true;
+  document.getElementById('progressSection').style.display = 'block';
+  document.getElementById('statsSection').style.display    = 'block';
+  document.getElementById('resultsTable').style.display    = 'none';
+  document.getElementById('emptyMsg').style.display        = 'block';
+  document.getElementById('emptyMsg').textContent          = 'Analisando...';
+  document.getElementById('resultsTableBody').innerHTML    = '';
+  document.getElementById('legendItems').innerHTML         = '';
+
+  // Calcular tamanho do lote: BATCH_CIDADES = MAX_COORDS_PER_REQUEST - num_aeroportos
+  // com mínimo 1 e máximo 50
+  const batchCidades = Math.min(MAX_BATCH_CIDADES, Math.max(1, MAX_COORDS_PER_REQUEST - aeroportos.length));
+  const totalLotes   = Math.ceil(cidades.length / batchCidades);
+
+  console.log(`[iniciarAnalise] ${cidades.length} cidades, ${aeroportos.length} aeroportos, lote=${batchCidades}, total lotes=${totalLotes}`);
+
+  let totalFiltradas = 0;
+  let totalOk        = 0;
+  let cidadesIgnoradas = 0;
+
+  for (let loteIdx = 0; loteIdx < totalLotes; loteIdx++) {
+    if (stopFlag) break;
+
+    const inicio  = loteIdx * batchCidades;
+    const fim     = Math.min(inicio + batchCidades, cidades.length);
+    const lote    = cidades.slice(inicio, fim);
+    const loteNum = loteIdx + 1;
+
+    setProgress(
+      inicio, cidades.length,
+      `Lote ${loteNum}/${totalLotes} — processando ${lote.length} cidades...`,
+      `Cidades ${inicio + 1}–${fim} de ${cidades.length}`
+    );
+
+    const resLote = await tableApiLote(lote, aeroportos);
+
+    if (resLote === null) {
+      // Lote falhou após todas as tentativas — pular e registrar aviso
+      console.error(`[iniciarAnalise] Lote ${loteNum} falhou, pulando ${lote.length} cidades.`);
+      cidadesIgnoradas += lote.length;
+      setProgress(fim, cidades.length,
+        `Lote ${loteNum}/${totalLotes} — ⚠ falhou, ${lote.length} cidades ignoradas`,
+        `Cidades ignoradas até agora: ${cidadesIgnoradas}`
+      );
+      await sleep(TABLE_BATCH_SLEEP_MS);
+      continue;
+    }
+
+    // Processar resultados do lote
+    for (let i = 0; i < lote.length; i++) {
+      const cidade  = lote[i];
+      const res     = resLote[i];
+
+      const resultado = {
+        uf:       cidade.uf,
+        cidade:   cidade.cidade,
+        lat:      cidade.lat,
+        lng:      cidade.lng,
+        aero:     res.melhorAero,
+        distKm:   res.distKm,
+        filtrada: res.distKm === null || res.distKm > distMin
+      };
+
+      window.resultados.push(resultado);
+      const resultIdx = window.resultados.length - 1;
+      adicionarLinhaTabela(resultado, resultIdx);
+
+      if (resultado.filtrada) totalFiltradas++; else totalOk++;
+    }
+
+    document.getElementById('stTotal').textContent     = window.resultados.length;
+    document.getElementById('stFiltradas').textContent = totalFiltradas;
+    document.getElementById('stOk').textContent        = totalOk;
+
+    // Tornar tabela visível assim que houver resultados
+    if (window.resultados.length > 0) {
+      document.getElementById('resultsTable').style.display = 'table';
+      document.getElementById('emptyMsg').style.display     = 'none';
+      document.getElementById('resultsCount').textContent   = `${window.resultados.length} cidades`;
+    }
+
+    if (loteIdx < totalLotes - 1 && !stopFlag) {
+      await sleep(TABLE_BATCH_SLEEP_MS);
+    }
+  }
+
+  analisando = false;
+  setProgress(cidades.length, cidades.length, 'Análise concluída!',
+    `Cache de geometrias: ${window.geomCache.size} rotas armazenadas` +
+    (cidadesIgnoradas > 0 ? ` | ⚠ ${cidadesIgnoradas} cidades ignoradas por falha na Table API` : '')
+  );
+  document.getElementById('btnAnalisar').disabled = false;
+  document.getElementById('btnExportar').disabled = false;
+
+  if (window.resultados.length > 0) {
+    document.getElementById('resultsTable').style.display = 'table';
+    document.getElementById('emptyMsg').style.display     = 'none';
+    document.getElementById('resultsCount').textContent   = `${window.resultados.length} cidades`;
+  }
+}
+
+// ============================================================
+// PROGRESSO
+// ============================================================
+function setProgress(atual, total, msg, detail) {
+  const pct = total > 0 ? Math.round((atual / total) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent  = `${pct}% — ${msg || ''}`;
+  if (detail !== undefined) document.getElementById('progressDetail').textContent = detail;
+}
+
+// ============================================================
+// TABELA DE RESULTADOS
+// ============================================================
+function adicionarLinhaTabela(r, idx) {
+  const tbody = document.getElementById('resultsTableBody');
+  const tr = document.createElement('tr');
+
+  const distTxt  = r.distKm !== null ? r.distKm.toFixed(1) + ' km' : 'N/A';
+  const aeroTxt  = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+
+  const badgeClass = r.filtrada ? 'badge-far' : 'badge-ok';
+  const badgeTxt   = r.filtrada ? '🔴 Filtrada' : '🟢 OK';
+
+  const btnTrace = r.aero
+    ? `<button class="btn-trace" onclick="drawRoute(${idx})">🗺 Traçar</button>`
+    : '<span style="color:#4a6a8a;font-size:0.72rem;">—</span>';
+
+  tr.innerHTML = `
+    <td>${escHtml(r.uf)}</td>
+    <td>${escHtml(r.cidade)}</td>
+    <td>${escHtml(aeroTxt)}</td>
+    <td><span class="badge-dist ${badgeClass}">${distTxt}</span></td>
+    <td><span class="badge-dist ${badgeClass}">${badgeTxt}</span></td>
+    <td>${btnTrace}</td>
+  `;
+  tbody.appendChild(tr);
+}
+
+// ============================================================
+// TRAÇAR ROTA (Route API — sob demanda)
+// ============================================================
+async function drawRoute(idx) {
+  const r = window.resultados[idx];
+  if (!r || !r.aero) { alert('Dados de rota indisponíveis.'); return; }
+
+  const cidade = { lat: r.lat, lng: r.lng };
+  const aero   = r.aero;
+  const key    = geomCacheKey(cidade.lng, cidade.lat, aero.lng, aero.lat);
+
+  const color  = ROUTE_COLORS[tracedLayers.length % ROUTE_COLORS.length];
+
+  // Verificar cache antes de requisição
+  let geometry = window.geomCache.get(key);
+
+  if (!geometry) {
+    const url = `${OSRM_ROUTE_BASE}${cidade.lng},${cidade.lat};${aero.lng},${aero.lat}?overview=full&geometries=geojson`;
+    try {
+      const resp = await fetch(url);
+      const json = await resp.json();
+      if (json.code === 'Ok' && json.routes && json.routes.length > 0) {
+        geometry = json.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        window.geomCache.set(key, geometry);
+      }
+    } catch (e) {
+      alert('Erro ao buscar rota: ' + e.message);
+      return;
+    }
+  }
+
+  if (!geometry) { alert('Não foi possível obter a geometria da rota.'); return; }
+
+  const polyline = L.polyline(geometry, { color, weight: 4, opacity: 0.8 });
+  polyline.addTo(map);
+  tracedLayers.push(polyline);
+
+  // Marcadores
+  const mCidade = L.circleMarker([cidade.lat, cidade.lng], { radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 2 })
+    .bindPopup(`<b>${escHtml(r.cidade)}</b> (${escHtml(r.uf)})<br>Dist: ${r.distKm ? r.distKm.toFixed(1) + ' km' : 'N/A'}`)
+    .addTo(map);
+  const mAero = L.circleMarker([aero.lat, aero.lng], { radius: 7, color: '#ffffff', fillColor: color, fillOpacity: 0.9, weight: 2 })
+    .bindPopup(`<b>✈ ${escHtml(aero.nome)}</b><br>${escHtml(aero.cidade)} (${escHtml(aero.uf)})`)
+    .addTo(map);
+  tracedLayers.push(mCidade, mAero);
+
+  // Fit bounds
+  map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+
+  // Legenda
+  const legItem = document.createElement('div');
+  legItem.className = 'leg-item';
+  legItem.innerHTML = `<div class="leg-line" style="background:${color}"></div><span>${escHtml(r.cidade)} → ${escHtml(aero.nome)}</span>`;
+  document.getElementById('legendItems').appendChild(legItem);
+}
+
+// ============================================================
+// EXPORTAR CSV
+// ============================================================
+function exportarCSV() {
+  if (window.resultados.length === 0) { alert('Nenhum resultado para exportar.'); return; }
+
+  const header = 'UF;Cidade;Aeroporto;Dist_Rodovia_km;Filtrada\n';
+  const linhas = window.resultados.map(r => {
+    const aeroNome = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+    return [
+      r.uf, r.cidade, aeroNome,
+      r.distKm !== null ? r.distKm.toFixed(2) : '',
+      r.filtrada ? 'Sim' : 'Não'
+    ].join(';');
+  }).join('\n');
+
+  const blob = new Blob(['\uFEFF' + header + linhas], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `analise_distancias_V10_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// LIMPAR
+// ============================================================
+function limpar() {
+  if (analisando) { stopFlag = true; analisando = false; }
+
+  cidades    = [];
+  aeroportos = [];
+  window.resultados = [];
+  window.geomCache  = new Map();
+
+  // Remover camadas do mapa
+  tracedLayers.forEach(l => map.removeLayer(l));
+  tracedLayers = [];
+
+  document.getElementById('fileCidades').value    = '';
+  document.getElementById('fileAeroportos').value = '';
+  document.getElementById('statusCidades').textContent    = 'Nenhum arquivo carregado';
+  document.getElementById('statusAeroportos').textContent = 'Nenhum arquivo carregado';
+  document.getElementById('alertParsing').style.display   = 'none';
+
+  document.getElementById('progressSection').style.display = 'none';
+  document.getElementById('statsSection').style.display    = 'none';
+  document.getElementById('progressFill').style.width      = '0%';
+  document.getElementById('progressText').textContent      = 'Aguardando...';
+  document.getElementById('progressDetail').textContent    = '';
+
+  document.getElementById('stTotal').textContent     = '0';
+  document.getElementById('stFiltradas').textContent = '0';
+  document.getElementById('stOk').textContent        = '0';
+  document.getElementById('stAero').textContent      = '0';
+
+  document.getElementById('resultsTable').style.display  = 'none';
+  document.getElementById('resultsTableBody').innerHTML  = '';
+  document.getElementById('resultsCount').textContent    = '';
+  document.getElementById('emptyMsg').style.display      = 'block';
+  document.getElementById('emptyMsg').textContent        = 'Carregue os arquivos e clique em Analisar para ver os resultados.';
+  document.getElementById('legendItems').innerHTML       = '';
+
+  document.getElementById('btnAnalisar').disabled = true;
+  document.getElementById('btnExportar').disabled = true;
+}
+</script>
+</body>
+</html>
