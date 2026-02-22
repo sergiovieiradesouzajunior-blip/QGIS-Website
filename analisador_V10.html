@@ -235,6 +235,9 @@
       </div>
       <div id="resultsBody">
         <div class="empty-msg" id="emptyMsg">Carregue os arquivos e clique em Analisar para ver os resultados.</div>
+        <div id="legendaEstimativa" style="display:none; padding: 6px 10px; font-size: 0.72rem; color: #ffa060; background: rgba(74,32,0,0.4); border: 1px solid #a04000; border-radius: 6px; margin-bottom: 6px;">
+          *Distância em linha reta: cidade situada em região isolada, onde o OSRM (OpenStreetMap Routing Machine) não possui dados rodoviários suficientes para calcular a rota.
+        </div>
         <table id="resultsTable" style="display:none;">
           <thead>
             <tr>
@@ -488,11 +491,24 @@ function geomCacheKey(lng1, lat1, lng2, lat2) {
 }
 
 // ============================================================
+// HAVERSINE (distância em linha reta)
+// ============================================================
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ============================================================
 // TABLE API DO OSRM
 // ============================================================
 /**
  * Chama a Table API do OSRM para um lote de cidades contra todos os aeroportos.
- * Retorna array de { cidadeIdx, melhorAero, distKm } ou null em caso de falha total.
+ * Retorna array de { cidadeIdx, melhorAero, distKm, estimado } ou null em caso de falha total.
  *
  * @param {Array} loteCidades  - subarray de objetos cidade {uf, cidade, lat, lng}
  * @param {Array} todosAero    - array de objetos aeroporto {uf, cidade, nome, lat, lng}
@@ -547,10 +563,21 @@ async function tableApiLote(loteCidades, todosAero) {
           }
         }
 
+        let fallbackAero = null;
+        let fallbackDistKm = null;
+        if (melhorAeroIdx < 0) {
+          let minHav = Infinity;
+          for (let j = 0; j < numAero; j++) {
+            const d = haversine(loteCidades[i].lat, loteCidades[i].lng, todosAero[j].lat, todosAero[j].lng);
+            if (d < minHav) { minHav = d; fallbackAero = todosAero[j]; fallbackDistKm = d; }
+          }
+        }
+
         resultados.push({
           cidadeIdx:  i,
-          melhorAero: melhorAeroIdx >= 0 ? todosAero[melhorAeroIdx] : null,
-          distKm:     melhorAeroIdx >= 0 ? melhorDistM / 1000 : null
+          melhorAero: melhorAeroIdx >= 0 ? todosAero[melhorAeroIdx] : fallbackAero,
+          distKm:     melhorAeroIdx >= 0 ? melhorDistM / 1000 : fallbackDistKm,
+          estimado:   melhorAeroIdx < 0
         });
       }
       return resultados;
@@ -583,6 +610,7 @@ async function iniciarAnalise() {
   document.getElementById('progressSection').style.display = 'block';
   document.getElementById('statsSection').style.display    = 'block';
   document.getElementById('resultsTable').style.display    = 'none';
+  document.getElementById('legendaEstimativa').style.display = 'none';
   document.getElementById('emptyMsg').style.display        = 'block';
   document.getElementById('emptyMsg').textContent          = 'Analisando...';
   document.getElementById('resultsTableBody').innerHTML    = '';
@@ -597,7 +625,7 @@ async function iniciarAnalise() {
 
   let totalFiltradas = 0;
   let totalOk        = 0;
-  let cidadesIgnoradas = 0;
+  let cidadesComFallback = 0;
 
   for (let loteIdx = 0; loteIdx < totalLotes; loteIdx++) {
     if (stopFlag) break;
@@ -616,13 +644,45 @@ async function iniciarAnalise() {
     const resLote = await tableApiLote(lote, aeroportos);
 
     if (resLote === null) {
-      // Lote falhou após todas as tentativas — pular e registrar aviso
-      console.error(`[iniciarAnalise] Lote ${loteNum} falhou, pulando ${lote.length} cidades.`);
-      cidadesIgnoradas += lote.length;
+      // Lote falhou após todas as tentativas — usar fallback Haversine para cada cidade
+      console.error(`[iniciarAnalise] Lote ${loteNum} falhou, usando fallback Haversine para ${lote.length} cidades.`);
+      cidadesComFallback += lote.length;
       setProgress(fim, cidades.length,
-        `Lote ${loteNum}/${totalLotes} — ⚠ falhou, ${lote.length} cidades ignoradas`,
-        `Cidades ignoradas até agora: ${cidadesIgnoradas}`
+        `Lote ${loteNum}/${totalLotes} — ⚠ falhou, usando estimativa Haversine`,
+        `Cidades com fallback Haversine: ${cidadesComFallback}`
       );
+      for (let i = 0; i < lote.length; i++) {
+        const cidade = lote[i];
+        let fallbackAero = null;
+        let fallbackDistKm = null;
+        let minHav = Infinity;
+        for (const aero of aeroportos) {
+          const d = haversine(cidade.lat, cidade.lng, aero.lat, aero.lng);
+          if (d < minHav) { minHav = d; fallbackAero = aero; fallbackDistKm = d; }
+        }
+        const resultado = {
+          uf:       cidade.uf,
+          cidade:   cidade.cidade,
+          lat:      cidade.lat,
+          lng:      cidade.lng,
+          aero:     fallbackAero,
+          distKm:   fallbackDistKm,
+          estimado: true,
+          filtrada: fallbackDistKm === null || fallbackDistKm > distMin
+        };
+        window.resultados.push(resultado);
+        adicionarLinhaTabela(resultado, window.resultados.length - 1);
+        if (resultado.estimado) document.getElementById('legendaEstimativa').style.display = 'block';
+        if (resultado.filtrada) totalFiltradas++; else totalOk++;
+      }
+      document.getElementById('stTotal').textContent     = window.resultados.length;
+      document.getElementById('stFiltradas').textContent = totalFiltradas;
+      document.getElementById('stOk').textContent        = totalOk;
+      if (window.resultados.length > 0) {
+        document.getElementById('resultsTable').style.display = 'table';
+        document.getElementById('emptyMsg').style.display     = 'none';
+        document.getElementById('resultsCount').textContent   = `${window.resultados.length} cidades`;
+      }
       await sleep(TABLE_BATCH_SLEEP_MS);
       continue;
     }
@@ -639,12 +699,15 @@ async function iniciarAnalise() {
         lng:      cidade.lng,
         aero:     res.melhorAero,
         distKm:   res.distKm,
+        estimado: res.estimado || false,
         filtrada: res.distKm === null || res.distKm > distMin
       };
 
       window.resultados.push(resultado);
       const resultIdx = window.resultados.length - 1;
       adicionarLinhaTabela(resultado, resultIdx);
+
+      if (resultado.estimado) document.getElementById('legendaEstimativa').style.display = 'block';
 
       if (resultado.filtrada) totalFiltradas++; else totalOk++;
     }
@@ -668,7 +731,7 @@ async function iniciarAnalise() {
   analisando = false;
   setProgress(cidades.length, cidades.length, 'Análise concluída!',
     `Cache de geometrias: ${window.geomCache.size} rotas armazenadas` +
-    (cidadesIgnoradas > 0 ? ` | ⚠ ${cidadesIgnoradas} cidades ignoradas por falha na Table API` : '')
+    (cidadesComFallback > 0 ? ` | ⚠ ${cidadesComFallback} cidades com estimativa Haversine` : '')
   );
   document.getElementById('btnAnalisar').disabled = false;
   document.getElementById('btnExportar').disabled = false;
@@ -697,7 +760,7 @@ function adicionarLinhaTabela(r, idx) {
   const tbody = document.getElementById('resultsTableBody');
   const tr = document.createElement('tr');
 
-  const distTxt  = r.distKm !== null ? r.distKm.toFixed(1) + ' km' : 'N/A';
+  const distTxt  = r.distKm !== null ? r.distKm.toFixed(1) + ' km' + (r.estimado ? ' (distância estimada)*' : '') : 'N/A';
   const aeroTxt  = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
   const cepTxt   = r.aero && r.aero.cep ? `<span class="badge-cep">${escHtml(r.aero.cep)}</span>` : '<span style="color:#4a6a8a;font-size:0.72rem;">—</span>';
 
@@ -782,13 +845,15 @@ async function drawRoute(idx) {
 function exportarCSV() {
   if (window.resultados.length === 0) { alert('Nenhum resultado para exportar.'); return; }
 
-  const header = 'UF;Cidade;Aeroporto;CEP;Dist_Rodovia_km;Filtrada\n';
+  const header = 'UF;Cidade;Aeroporto;CEP;Dist_Rodovia_km;Estimado;Filtrada\n';
   const linhas = window.resultados.map(r => {
     const aeroNome = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
     const aeroCep  = r.aero ? (r.aero.cep || '') : '';
+    const distVal  = r.distKm !== null ? r.distKm.toFixed(2) + (r.estimado ? ' (estimativa)' : '') : '';
     return [
       r.uf, r.cidade, aeroNome, aeroCep,
-      r.distKm !== null ? r.distKm.toFixed(2) : '',
+      distVal,
+      r.estimado ? 'Sim' : 'Não',
       r.filtrada ? 'Sim' : 'Não'
     ].join(';');
   }).join('\n');
@@ -836,6 +901,7 @@ function limpar() {
 
   document.getElementById('resultsTable').style.display  = 'none';
   document.getElementById('resultsTableBody').innerHTML  = '';
+  document.getElementById('legendaEstimativa').style.display = 'none';
   document.getElementById('resultsCount').textContent    = '';
   document.getElementById('emptyMsg').style.display      = 'block';
   document.getElementById('emptyMsg').textContent        = 'Carregue os arquivos e clique em Analisar para ver os resultados.';
