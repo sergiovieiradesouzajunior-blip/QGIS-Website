@@ -131,6 +131,7 @@
   }
   .badge-ok   { background: rgba(26,122,58,0.3); color: #4dcc80; border: 1px solid #1a7a3a; }
   .badge-far  { background: rgba(180,40,40,0.3); color: #ff7070; border: 1px solid #aa2020; }
+  .badge-cep  { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; background: #16213e; color: #c0d8f0; border: 1px solid #2a4a7a; font-family: 'Courier New', Courier, monospace; }
 
   .btn-trace {
     padding: 3px 10px; border-radius: 5px; border: 1px solid #6a0dad;
@@ -177,7 +178,7 @@
         <div class="file-status" id="statusCidades">Nenhum arquivo carregado</div>
       </div>
       <div class="form-group">
-        <label>Arquivo de Aeroportos (UF;Cidade;NomeAero;Lat;Lng)</label>
+        <label>Arquivo de Aeroportos (UF;Cidade;NomeAero;Lat;Lng;CEP)</label>
         <input type="file" id="fileAeroportos" accept=".txt,.csv">
         <div class="file-status" id="statusAeroportos">Nenhum arquivo carregado</div>
       </div>
@@ -240,6 +241,7 @@
               <th>UF</th>
               <th>Cidade</th>
               <th>Aeroporto Mais Próximo</th>
+              <th>CEP</th>
               <th>Distância (km)</th>
               <th>Status</th>
               <th>Ação</th>
@@ -365,7 +367,7 @@ function parseCidades(texto) {
 
 /**
  * Parseia arquivo de aeroportos.
- * Formato esperado: UF;Cidade;NomeAeroporto;Latitude;Longitude
+ * Formato esperado: UF;Cidade;NomeAeroporto;Latitude;Longitude;CEP
  * Retorna { dados, ignoradas, motivos }
  */
 function parseAeroportos(texto) {
@@ -398,7 +400,8 @@ function parseAeroportos(texto) {
       console.warn('[parseAeroportos]', mot);
       return;
     }
-    dados.push({ uf: uf.trim(), cidade: cidade.trim(), nome: nome.trim(), lat, lng });
+    const cep = partes.length >= 6 ? partes[5].trim() : '';
+    dados.push({ uf: uf.trim(), cidade: cidade.trim(), nome: nome.trim(), lat, lng, cep });
   });
 
   console.log(`[parseAeroportos] Processadas: ${dados.length}, Ignoradas: ${ignoradas}`);
@@ -696,6 +699,7 @@ function adicionarLinhaTabela(r, idx) {
 
   const distTxt  = r.distKm !== null ? r.distKm.toFixed(1) + ' km' : 'N/A';
   const aeroTxt  = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+  const cepTxt   = r.aero && r.aero.cep ? `<span class="badge-cep">${escHtml(r.aero.cep)}</span>` : '<span style="color:#4a6a8a;font-size:0.72rem;">—</span>';
 
   const badgeClass = r.filtrada ? 'badge-far' : 'badge-ok';
   const badgeTxt   = r.filtrada ? '🔴 Filtrada' : '🟢 OK';
@@ -708,6 +712,7 @@ function adicionarLinhaTabela(r, idx) {
     <td>${escHtml(r.uf)}</td>
     <td>${escHtml(r.cidade)}</td>
     <td>${escHtml(aeroTxt)}</td>
+    <td>${cepTxt}</td>
     <td><span class="badge-dist ${badgeClass}">${distTxt}</span></td>
     <td><span class="badge-dist ${badgeClass}">${badgeTxt}</span></td>
     <td>${btnTrace}</td>
@@ -757,7 +762,7 @@ async function drawRoute(idx) {
     .bindPopup(`<b>${escHtml(r.cidade)}</b> (${escHtml(r.uf)})<br>Dist: ${r.distKm ? r.distKm.toFixed(1) + ' km' : 'N/A'}`)
     .addTo(map);
   const mAero = L.circleMarker([aero.lat, aero.lng], { radius: 7, color: '#ffffff', fillColor: color, fillOpacity: 0.9, weight: 2 })
-    .bindPopup(`<b>✈ ${escHtml(aero.nome)}</b><br>${escHtml(aero.cidade)} (${escHtml(aero.uf)})`)
+    .bindPopup(`<b>✈ ${escHtml(aero.nome)}</b><br>${escHtml(aero.cidade)} (${escHtml(aero.uf)})${aero.cep ? '<br>📮 CEP: ' + escHtml(aero.cep) : ''}`)
     .addTo(map);
   tracedLayers.push(mCidade, mAero);
 
@@ -767,7 +772,7 @@ async function drawRoute(idx) {
   // Legenda
   const legItem = document.createElement('div');
   legItem.className = 'leg-item';
-  legItem.innerHTML = `<div class="leg-line" style="background:${color}"></div><span>${escHtml(r.cidade)} → ${escHtml(aero.nome)}</span>`;
+  legItem.innerHTML = `<div class="leg-line" style="background:${color}"></div><span>${escHtml(r.cidade)} → ${escHtml(aero.nome)}${aero.cep ? ' · 📮 ' + escHtml(aero.cep) : ''}</span>`;
   document.getElementById('legendItems').appendChild(legItem);
 }
 
@@ -777,11 +782,12 @@ async function drawRoute(idx) {
 function exportarCSV() {
   if (window.resultados.length === 0) { alert('Nenhum resultado para exportar.'); return; }
 
-  const header = 'UF;Cidade;Aeroporto;Dist_Rodovia_km;Filtrada\n';
+  const header = 'UF;Cidade;Aeroporto;CEP;Dist_Rodovia_km;Filtrada\n';
   const linhas = window.resultados.map(r => {
     const aeroNome = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+    const aeroCep  = r.aero ? (r.aero.cep || '') : '';
     return [
-      r.uf, r.cidade, aeroNome,
+      r.uf, r.cidade, aeroNome, aeroCep,
       r.distKm !== null ? r.distKm.toFixed(2) : '',
       r.filtrada ? 'Sim' : 'Não'
     ].join(';');
