@@ -155,6 +155,12 @@
   ::-webkit-scrollbar-thumb:hover { background: #6a0dad; }
 
   .empty-msg { text-align: center; color: #4a6a8a; padding: 30px; font-size: 0.82rem; }
+
+  .badge-iata {
+    display: inline-block; background: #2a2a4a; color: #c0d8ff;
+    border: 1px solid #4a6aaa; border-radius: 4px;
+    padding: 2px 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+  }
 </style>
 </head>
 <body>
@@ -177,7 +183,7 @@
         <div class="file-status" id="statusCidades">Nenhum arquivo carregado</div>
       </div>
       <div class="form-group">
-        <label>Arquivo de Aeroportos (UF;Cidade;NomeAero;Lat;Lng)</label>
+        <label>Arquivo de Aeroportos (UF;Cidade;NomeAero;Lat;Lng;IATA)</label>
         <input type="file" id="fileAeroportos" accept=".txt,.csv">
         <div class="file-status" id="statusAeroportos">Nenhum arquivo carregado</div>
       </div>
@@ -240,6 +246,7 @@
               <th>UF</th>
               <th>Cidade</th>
               <th>Aeroporto Mais Próximo</th>
+              <th>IATA</th>
               <th>Distância (km)</th>
               <th>Status</th>
               <th>Ação</th>
@@ -398,7 +405,7 @@ function parseAeroportos(texto) {
       console.warn('[parseAeroportos]', mot);
       return;
     }
-    dados.push({ uf: uf.trim(), cidade: cidade.trim(), nome: nome.trim(), lat, lng });
+    dados.push({ uf: uf.trim(), cidade: cidade.trim(), nome: nome.trim(), lat, lng, iata: partes.length >= 6 ? partes[5].trim().toUpperCase() : '' });
   });
 
   console.log(`[parseAeroportos] Processadas: ${dados.length}, Ignoradas: ${ignoradas}`);
@@ -696,6 +703,7 @@ function adicionarLinhaTabela(r, idx) {
 
   const distTxt  = r.distKm !== null ? r.distKm.toFixed(1) + ' km' : 'N/A';
   const aeroTxt  = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+  const iataTxt  = r.aero && r.aero.iata ? r.aero.iata : '';
 
   const badgeClass = r.filtrada ? 'badge-far' : 'badge-ok';
   const badgeTxt   = r.filtrada ? '🔴 Filtrada' : '🟢 OK';
@@ -708,6 +716,7 @@ function adicionarLinhaTabela(r, idx) {
     <td>${escHtml(r.uf)}</td>
     <td>${escHtml(r.cidade)}</td>
     <td>${escHtml(aeroTxt)}</td>
+    <td>${iataTxt ? `<span class="badge-iata">${escHtml(iataTxt)}</span>` : '<span style="color:#4a6a8a;font-size:0.72rem;">—</span>'}</td>
     <td><span class="badge-dist ${badgeClass}">${distTxt}</span></td>
     <td><span class="badge-dist ${badgeClass}">${badgeTxt}</span></td>
     <td>${btnTrace}</td>
@@ -757,7 +766,7 @@ async function drawRoute(idx) {
     .bindPopup(`<b>${escHtml(r.cidade)}</b> (${escHtml(r.uf)})<br>Dist: ${r.distKm ? r.distKm.toFixed(1) + ' km' : 'N/A'}`)
     .addTo(map);
   const mAero = L.circleMarker([aero.lat, aero.lng], { radius: 7, color: '#ffffff', fillColor: color, fillOpacity: 0.9, weight: 2 })
-    .bindPopup(`<b>✈ ${escHtml(aero.nome)}</b><br>${escHtml(aero.cidade)} (${escHtml(aero.uf)})`)
+    .bindPopup(`<b>✈ ${escHtml(aero.nome)}${aero.iata ? ` (${escHtml(aero.iata)})` : ''}</b><br>${escHtml(aero.cidade)} (${escHtml(aero.uf)})`)
     .addTo(map);
   tracedLayers.push(mCidade, mAero);
 
@@ -767,7 +776,7 @@ async function drawRoute(idx) {
   // Legenda
   const legItem = document.createElement('div');
   legItem.className = 'leg-item';
-  legItem.innerHTML = `<div class="leg-line" style="background:${color}"></div><span>${escHtml(r.cidade)} → ${escHtml(aero.nome)}</span>`;
+  legItem.innerHTML = `<div class="leg-line" style="background:${color}"></div><span>${escHtml(r.cidade)} → ${escHtml(aero.nome)}${aero.iata ? ` (${escHtml(aero.iata)})` : ''}</span>`;
   document.getElementById('legendItems').appendChild(legItem);
 }
 
@@ -777,11 +786,12 @@ async function drawRoute(idx) {
 function exportarCSV() {
   if (window.resultados.length === 0) { alert('Nenhum resultado para exportar.'); return; }
 
-  const header = 'UF;Cidade;Aeroporto;Dist_Rodovia_km;Filtrada\n';
+  const header = 'UF;Cidade;Aeroporto;IATA;Dist_Rodovia_km;Filtrada\n';
   const linhas = window.resultados.map(r => {
     const aeroNome = r.aero ? `${r.aero.nome} (${r.aero.uf})` : 'N/A';
+    const iata     = r.aero ? (r.aero.iata || '') : '';
     return [
-      r.uf, r.cidade, aeroNome,
+      r.uf, r.cidade, aeroNome, iata,
       r.distKm !== null ? r.distKm.toFixed(2) : '',
       r.filtrada ? 'Sim' : 'Não'
     ].join(';');
